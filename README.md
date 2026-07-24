@@ -90,7 +90,6 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run_FG_windows.ps1
 运行过程会在终端显示：
 
 - 盒子名称、IP、连接状态和盒子时间；
-- 盒子 SN、设备型号、主机名和 Machine ID；
 - 文件完整性结果及有无异常文件；
 - 每个抽检文件的名称；
 - 六路数据的名称、帧率、帧率结果、Topic、时间 ns、UTC+8 时间、与视频差值和
