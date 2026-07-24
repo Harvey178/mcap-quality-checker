@@ -1,0 +1,15 @@
+{
+  "stable_seconds": 180,
+  "rate_tolerance_percent": 5.0,
+  "gap_factor": 2.5,
+  "sync_threshold_ms": 1000.0,
+  "coverage_threshold_ms": 100.0,
+  "streams": {
+    "camera": {"topic": "/head/rgb/compressed", "expected_hz": 30.0, "timestamp_path": "timing.event_time_ns", "timestamp_unit": "ns"},
+    "head_imu": {"topic": "/head/imu", "expected_hz": 100.0, "timestamp_path": "device_timestamp_us", "timestamp_unit": "us"},
+    "left_imu": {"topic": "/forearm/left/imu", "expected_hz": 100.0, "timestamp_path": "capture_time_ns", "timestamp_unit": "ns"},
+    "right_imu": {"topic": "/forearm/right/imu", "expected_hz": 100.0, "timestamp_path": "capture_time_ns", "timestamp_unit": "ns"},
+    "left_emg": {"topic": "/forearm/left/emg_batch", "expected_hz": 2000.0, "timestamp_path": "samples.0.capture_time_ns", "timestamp_unit": "ns"},
+    "right_emg": {"topic": "/forearm/right/emg_batch", "expected_hz": 2000.0, "timestamp_path": "samples.0.capture_time_ns", "timestamp_unit": "ns"}
+  }
+}
