@@ -5,9 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 import random
-import socket
 import stat
 import subprocess
 import sys
@@ -17,22 +15,10 @@ from pathlib import Path, PurePosixPath
 
 import paramiko
 
+from box_config import get_box_names, resolve_and_update
+
 
 ROOT = Path(__file__).resolve().parent
-
-
-def resolve_and_update(config_path: Path) -> dict:
-    config = json.loads(config_path.read_text(encoding="utf-8"))
-    ssh = config["ssh"]
-    try:
-        ssh["ip"] = socket.gethostbyname(ssh.get("hostname") or ssh["ip"])
-    except socket.gaierror:
-        if not ssh.get("ip"):
-            raise RuntimeError("无法解析盒子主机名，且配置中没有可用IP")
-    temporary = config_path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    temporary.replace(config_path)
-    return config
 
 
 def walk_mcap(sftp: paramiko.SFTPClient, root: str):
@@ -67,11 +53,30 @@ def run_check(arguments: list[str]) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Windows本地通过SSH抽样检查盒子MCAP")
-    parser.add_argument("--config", type=Path, default=ROOT / "client_config.json")
+    parser.add_argument("--config", type=Path, default=ROOT / "boxes.yaml")
+    parser.add_argument("--box", help="只检测指定名称的盒子；默认依次检测全部盒子")
     parser.add_argument("--seed", help="默认使用当天日期")
     args = parser.parse_args()
     config_path = args.config.resolve()
-    config = resolve_and_update(config_path)
+    if not args.box:
+        box_names = get_box_names(config_path)
+        if len(box_names) > 1:
+            exit_codes = []
+            for box_name in box_names:
+                command = [
+                    sys.executable,
+                    str(Path(__file__).resolve()),
+                    "--config",
+                    str(config_path),
+                    "--box",
+                    box_name,
+                ]
+                if args.seed:
+                    command.extend(["--seed", args.seed])
+                print(f"\n========== 开始检测盒子: {box_name} ==========", flush=True)
+                exit_codes.append(subprocess.run(command, cwd=ROOT).returncode)
+            return 1 if any(exit_codes) else 0
+    config = resolve_and_update(config_path, args.box)
     ssh = config["ssh"]
     seed = args.seed or datetime.now().strftime("%Y%m%d")
     sample_size = int(config.get("sample_size", 5))
@@ -101,7 +106,11 @@ def main() -> int:
     print(f"远程MCAP: {len(entries)}，0KB: {len(zero_files)}，可抽样: {len(eligible)}")
     print(f"随机抽样: {len(selected)}，种子={seed}")
 
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_box_name = "".join(
+        char if char.isalnum() or char in "-_" else "_"
+        for char in config["box_name"]
+    )
+    stamp = f"{datetime.now():%Y%m%d_%H%M%S}_{safe_box_name}"
     download_root = (ROOT / config["download_directory"] / stamp).resolve()
     report_root = (ROOT / config["report_directory"] / stamp).resolve()
     download_root.mkdir(parents=True, exist_ok=True)

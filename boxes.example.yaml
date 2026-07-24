@@ -1,0 +1,45 @@
+# 数据采集盒 MCAP 检测配置模板
+# 使用方法：
+#   1. Copy-Item .\boxes.example.yaml .\boxes.yaml
+#   2. 填写盒子地址、SSH 账号和密码
+#   3. boxes.yaml 已加入 .gitignore，不会提交到 GitHub
+
+remote_dir: /mnt/tf/bronze
+remote_log_dir: /rkbox/log
+remote_log_margin_sec: 60
+
+report_dir: reports
+task_log_dir: logs
+anomaly_dir: anomalies
+download_dir: downloads
+
+# 随机抽检数量和“仍在写入”保护时间
+sample_count: 5
+stable_seconds: 180
+
+# 帧率和同步标准
+imu_hz: 100
+emg_hz: 2000
+rgb_hz: 30
+rate_tolerance: 0.05
+max_time_delta_sec: 1.0
+
+# 所有盒子默认使用的 SSH 参数；单个盒子可在 boxes 中覆盖
+ssh:
+  user: cat
+  password: PLEASE_CHANGE_ME
+  port: 22
+  connect_timeout: 15
+
+boxes:
+  - name: box-01
+    host: lubancat.local
+    resolved_ip: ""
+
+  # - name: box-02
+  #   host: 192.168.x.x
+  #   resolved_ip: ""
+  #   ssh:
+  #     user: cat
+  #     password: box2_password
+  #     port: 22

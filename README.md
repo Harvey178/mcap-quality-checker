@@ -30,6 +30,7 @@ Python 包统一写在 `requirements.txt`：
 mcap==1.4.0
 mcap-protobuf-support==0.5.4
 paramiko==5.0.0
+ruamel.yaml==0.18.10
 ```
 
 ## 一、下载项目
@@ -53,27 +54,94 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 创建本地配置文件：
 
 ```powershell
-Copy-Item .\client_config.example.json .\client_config.json
-notepad .\client_config.json
+Copy-Item .\boxes.example.yaml .\boxes.yaml
+notepad .\boxes.yaml
 ```
 
 至少填写以下内容：
 
-```json
-{
-  "box_name": "box-01",
-  "hostname": "lubancat.local",
-  "port": 22,
-  "username": "cat",
-  "password": "请填写盒子密码",
-  "remote_mcap_dir": "/mnt/tf/bronze",
-  "remote_log_dir": "/rkbox/log",
-  "sample_size": 5
-}
+```yaml
+ssh:
+  user: cat
+  password: 请填写盒子密码
+  port: 22
+
+boxes:
+  - name: box-01
+    host: lubancat.local
+    resolved_ip: ""
 ```
 
-`hostname` 可以填写盒子域名或当前 IP。程序连接成功后会自动获取盒子 IP，并
-更新本地 `client_config.json`。
+`host` 可以填写盒子域名或当前 IP。程序连接成功后会自动解析盒子 IP，并更新
+对应盒子的 `resolved_ip`。如需检测多个盒子，在 `boxes:` 下继续添加即可；
+脚本默认依次检测全部盒子。单个盒子需要不同的 SSH 账号或密码时，可以在该盒子
+下增加 `ssh:` 覆盖全局设置。
+
+### 完整配置示例
+
+```yaml
+remote_dir: /mnt/tf/bronze
+remote_log_dir: /rkbox/log
+remote_log_margin_sec: 60
+
+report_dir: reports
+task_log_dir: logs
+anomaly_dir: anomalies
+download_dir: downloads
+
+sample_count: 5
+stable_seconds: 180
+
+imu_hz: 100
+emg_hz: 2000
+rgb_hz: 30
+rate_tolerance: 0.05
+max_time_delta_sec: 1.0
+
+ssh:
+  user: cat
+  password: 请填写默认密码
+  port: 22
+  connect_timeout: 15
+
+boxes:
+  - name: box-01
+    host: lubancat.local
+    resolved_ip: ""
+
+  - name: box-02
+    host: 192.168.137.190
+    resolved_ip: ""
+    ssh:
+      user: cat
+      password: 请填写box-02密码
+      port: 22
+```
+
+### 配置项说明
+
+| 配置项 | 默认值 | 用途 |
+|---|---:|---|
+| `remote_dir` | `/mnt/tf/bronze` | 盒子上的 MCAP 目录 |
+| `remote_log_dir` | `/rkbox/log` | 盒子运行日志目录 |
+| `remote_log_margin_sec` | `60` | 异常时间前后提取日志的秒数 |
+| `report_dir` | `reports` | Windows TXT 报告目录 |
+| `task_log_dir` | `logs` | Windows 任务日志目录 |
+| `anomaly_dir` | `anomalies` | 异常文件及日志目录 |
+| `sample_count` | `5` | 每个盒子随机抽检的 MCAP 数量 |
+| `stable_seconds` | `180` | 文件多久未修改才认为写入完成 |
+| `imu_hz` | `100` | 头部及左右 IMU 目标帧率 |
+| `emg_hz` | `2000` | 左右 EMG 目标帧率 |
+| `rgb_hz` | `30` | RGB 视频目标帧率 |
+| `rate_tolerance` | `0.05` | 帧率允许误差，`0.05` 表示 5% |
+| `max_time_delta_sec` | `1.0` | 六路时间与 RGB 的最大允许差值 |
+| `ssh.connect_timeout` | `15` | SSH 连接超时秒数 |
+| `boxes[].name` | 必填 | 盒子名称，也是报告目录名称的一部分 |
+| `boxes[].host` | 必填 | 盒子域名或 IP |
+| `boxes[].resolved_ip` | 自动填写 | 最近一次成功解析出的 IP |
+
+不要手动依赖 `resolved_ip` 作为主地址。脚本优先解析 `host`，解析失败时才使用
+上次保存的 `resolved_ip`。
 
 安装独立 Python 环境和依赖：
 
@@ -83,9 +151,26 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup_windows.ps1
 
 ## 三、手动运行
 
+检测 `boxes.yaml` 中的全部盒子：
+
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run_FG_windows.ps1
 ```
+
+只检测某一个盒子：
+
+```powershell
+.\.venv\Scripts\python.exe .\mcap_check_for_FG.py --box box-01
+```
+
+临时指定另一份配置：
+
+```powershell
+.\.venv\Scripts\python.exe .\mcap_check_for_FG.py --config D:\config\boxes.yaml
+```
+
+多盒子按 `boxes:` 中的顺序依次执行。如果任意一个盒子检测失败，脚本最终返回
+失败状态。
 
 运行过程会在终端显示：
 
@@ -101,11 +186,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run_FG_windows.ps1
 每次运行使用独立的时间戳目录：
 
 ```text
-reports/<运行时间>/测试报告_*.txt
-logs/<运行时间>/脚本运行.log
-logs/<运行时间>/异常处理.log
-logs/<运行时间>/盒子检测明细.log
-anomalies/<运行时间>/<问题文件名>/
+reports/<运行时间_盒子名称>/测试报告_*.txt
+logs/<运行时间_盒子名称>/脚本运行.log
+logs/<运行时间_盒子名称>/异常处理.log
+logs/<运行时间_盒子名称>/盒子检测明细.log
+anomalies/<运行时间_盒子名称>/<问题文件名>/
 ```
 
 异常目录可能包含：
@@ -152,7 +237,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\uninstall_scheduled_ta
 ```
 
 计划任务使用当前 Windows 用户身份，仅在用户登录状态下运行。电脑在触发时间
-关机或休眠时，会在恢复后尽快补跑。
+关机或休眠时，会在恢复后尽快补跑。计划任务每次都会读取最新的 `boxes.yaml`，
+所以后续新增盒子不需要重新创建计划任务。
 
 ## 六、在 Visual Studio Code 中运行
 
@@ -201,7 +287,7 @@ ssh cat@lubancat.local
 
 以下内容已被 `.gitignore` 排除，不应提交到 GitHub：
 
-- `client_config.json` 及 SSH 密码；
+- `boxes.yaml` 及 SSH 密码；
 - 下载的 `*.mcap`；
 - `reports/`、`logs/`、`anomalies/`；
 - Python 虚拟环境 `.venv/`；
@@ -211,7 +297,18 @@ ssh cat@lubancat.local
 
 ```powershell
 git status
-git check-ignore client_config.json
+git check-ignore boxes.yaml
 ```
 
 发现密码或 MCAP 被暂存时，不要执行 `git commit` 或 `git push`。
+
+## 更新现有安装
+
+代码更新或 `requirements.txt` 发生变化后，在项目目录执行：
+
+```powershell
+git pull
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup_windows.ps1
+```
+
+`git pull` 不会覆盖本地 `boxes.yaml`，因为该文件不进入 Git 版本管理。

@@ -8,6 +8,7 @@ import json
 import posixpath
 import random
 import shlex
+import subprocess
 import sys
 import time
 import traceback
@@ -16,7 +17,8 @@ from pathlib import Path
 
 import paramiko
 
-from run_windows_local import download, resolve_and_update, walk_mcap
+from box_config import get_box_names, resolve_and_update
+from run_windows_local import download, walk_mcap
 
 
 ROOT = Path(__file__).resolve().parent
@@ -109,15 +111,39 @@ def remote_run_background(
 def main() -> int:
     global RUN_LOG_PATH, ERROR_LOG_PATH
     parser = argparse.ArgumentParser(description="Windows启动盒子检测并按需下载问题文件")
-    parser.add_argument("--config", type=Path, default=ROOT / "client_config.json")
+    parser.add_argument("--config", type=Path, default=ROOT / "boxes.yaml")
+    parser.add_argument("--box", help="只检测指定名称的盒子；默认依次检测全部盒子")
     parser.add_argument("--seed", help="默认使用当天日期")
     args = parser.parse_args()
-    config = resolve_and_update(args.config.resolve())
+    config_path = args.config.resolve()
+    if not args.box:
+        box_names = get_box_names(config_path)
+        if len(box_names) > 1:
+            exit_codes = []
+            for box_name in box_names:
+                command = [
+                    sys.executable,
+                    str(Path(__file__).resolve()),
+                    "--config",
+                    str(config_path),
+                    "--box",
+                    box_name,
+                ]
+                if args.seed:
+                    command.extend(["--seed", args.seed])
+                print(f"\n========== 开始检测盒子: {box_name} ==========", flush=True)
+                exit_codes.append(subprocess.run(command, cwd=ROOT).returncode)
+            return 1 if any(exit_codes) else 0
+    config = resolve_and_update(config_path, args.box)
     ssh = config["ssh"]
     seed = args.seed or datetime.now().strftime("%Y%m%d")
     sample_size = int(config.get("sample_size", 5))
     stable_seconds = int(config.get("stable_seconds", 180))
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_box_name = "".join(
+        char if char.isalnum() or char in "-_" else "_"
+        for char in config["box_name"]
+    )
+    stamp = f"{datetime.now():%Y%m%d_%H%M%S}_{safe_box_name}"
     local_report = (
         ROOT / config.get("fg_report_directory", "./reports") / stamp
     ).resolve()
@@ -131,6 +157,26 @@ def main() -> int:
     task_log_dir.mkdir(parents=True, exist_ok=True)
     RUN_LOG_PATH = task_log_dir / "脚本运行.log"
     ERROR_LOG_PATH = task_log_dir / "异常处理.log"
+    runtime_check_config = json.loads(
+        (ROOT / "mcap_check_config.json").read_text(encoding="utf-8")
+    )
+    runtime_check_config["stable_seconds"] = stable_seconds
+    runtime_check_config["rate_tolerance_percent"] = (
+        float(config["rate_tolerance"]) * 100
+    )
+    runtime_check_config["sync_threshold_ms"] = (
+        float(config["max_time_delta_sec"]) * 1000
+    )
+    for stream_name in ("head_imu", "left_imu", "right_imu"):
+        runtime_check_config["streams"][stream_name]["expected_hz"] = config["imu_hz"]
+    for stream_name in ("left_emg", "right_emg"):
+        runtime_check_config["streams"][stream_name]["expected_hz"] = config["emg_hz"]
+    runtime_check_config["streams"]["camera"]["expected_hz"] = config["rgb_hz"]
+    runtime_check_config_path = task_log_dir / "检测参数.json"
+    runtime_check_config_path.write_text(
+        json.dumps(runtime_check_config, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     run_log(f"脚本启动，抽样日期={seed}")
     run_log(f"配置文件={args.config.resolve()}")
     error_log("异常处理日志初始化")
@@ -176,7 +222,7 @@ def main() -> int:
     uploads = {
         ROOT / "mcap_check_for_FG_local.py": f"{remote_root}/mcap_check_for_FG.py",
         ROOT / "mcap_daily_check.py": f"{remote_root}/mcap_daily_check.py",
-        ROOT / "mcap_check_config.json": f"{remote_root}/mcap_check_config.json",
+        runtime_check_config_path: f"{remote_root}/mcap_check_config.json",
         ROOT / "extract_remote_logs.py": f"{remote_root}/extract_remote_logs.py",
     }
     for local, remote in uploads.items():
@@ -269,7 +315,9 @@ def main() -> int:
             remote_excerpt = f"{remote_root}/{Path(remote_mcap).stem}_problem.log"
             extract_command = (
                 f"python3 {shlex.quote(remote_root + '/extract_remote_logs.py')} "
-                f"--utc-time {shlex.quote(utc_time)} --window-seconds 60 "
+                f"--utc-time {shlex.quote(utc_time)} "
+                f"--window-seconds {int(config['remote_log_margin_sec'])} "
+                f"--log-dir {shlex.quote(config['remote_log_directory'])} "
                 f"--output {shlex.quote(remote_excerpt)}"
             )
             remote_run(client, extract_command, timeout=120)
