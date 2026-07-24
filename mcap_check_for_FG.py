@@ -145,13 +145,30 @@ def main() -> int:
     )
     run_log("SSH连接成功")
     sftp = client.open_sftp()
-    _, box_stdout, _ = client.exec_command(
-        "printf '%s\\n' \"$(hostname)\" \"$(date '+%Y-%m-%d %H:%M:%S %z')\"",
-        timeout=15,
+    box_info_command = (
+        "printf '%s\\n' "
+        "\"$(hostname)\" "
+        "\"$(date '+%Y-%m-%d %H:%M:%S %z')\" "
+        "\"$(tr -d '\\000' </proc/device-tree/serial-number 2>/dev/null || "
+        "tr -d '\\000' </sys/firmware/devicetree/base/serial-number "
+        "2>/dev/null || true)\" "
+        "\"$(tr -d '\\000' </proc/device-tree/model 2>/dev/null || true)\" "
+        "\"$(cat /etc/machine-id 2>/dev/null || true)\""
     )
+    _, box_stdout, _ = client.exec_command(box_info_command, timeout=15)
     box_lines = box_stdout.read().decode("utf-8", errors="replace").splitlines()
     remote_hostname = box_lines[0] if box_lines else "unknown"
     box_time = box_lines[1] if len(box_lines) > 1 else "unknown"
+    box_serial = box_lines[2].strip() if len(box_lines) > 2 else ""
+    box_model = box_lines[3].strip() if len(box_lines) > 3 else ""
+    box_machine_id = box_lines[4].strip() if len(box_lines) > 4 else ""
+    box_serial = box_serial or "unknown"
+    box_model = box_model or "unknown"
+    box_machine_id = box_machine_id or "unknown"
+    run_log(
+        f"盒子信息：SN={box_serial}，型号={box_model}，"
+        f"主机名={remote_hostname}，Machine ID={box_machine_id}"
+    )
     entries = list(walk_mcap(sftp, config["remote_data_directory"]))
     now = time.time()
     zero_files = sorted(path for path, item in entries if item.st_size == 0)
@@ -301,6 +318,10 @@ def main() -> int:
     emit()
     emit(f"[盒子] {config.get('box_name', remote_hostname)}  host={ssh['ip']}")
     emit("  连接: OK")
+    emit(f"  盒子SN: {box_serial}")
+    emit(f"  设备型号: {box_model}")
+    emit(f"  主机名: {remote_hostname}")
+    emit(f"  Machine ID: {box_machine_id}")
     emit(f"  盒子时间(北京): {box_time}")
     emit(f"  抽样日期: {seed}")
     emit(f"  本盒结果: {'FAIL' if failed else 'PASS'}")
