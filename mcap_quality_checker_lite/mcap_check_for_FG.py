@@ -265,8 +265,8 @@ def main() -> int:
     client.exec_command(f"mkdir -p {shlex.quote(remote_report)}")[1].channel.recv_exit_status()
     # 远程只部署分析所需文件，正常 MCAP 始终留在盒子上。
     uploads = {
-        ROOT / "mcap_check_for_FG_local.py": f"{remote_root}/mcap_check_for_FG.py",
-        ROOT / "mcap_daily_check.py": f"{remote_root}/mcap_daily_check.py",
+        # 本地文件名表达用途；远程仍使用固定入口名以保持命令稳定。
+        ROOT / "data_analyze.py": f"{remote_root}/mcap_check_for_FG.py",
         runtime_check_config_path: f"{remote_root}/mcap_check_config.json",
         ROOT / "extract_remote_logs.py": f"{remote_root}/extract_remote_logs.py",
     }

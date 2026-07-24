@@ -5,6 +5,13 @@
 Windows 本地。正常 MCAP 不会下载，只有发现异常时才下载问题文件及
 `/rkbox/log` 对应时间段的日志。
 
+## 轻量版
+
+推荐新部署使用 [`mcap_quality_checker_lite/`](mcap_quality_checker_lite/)。
+轻量版已经移除旧的本地下载检测模式，并将完整性、帧率和同步分析集中到
+`data_analyze.py`，运行功能和计划任务保持不变。详细步骤见轻量版目录中的
+[`README.md`](mcap_quality_checker_lite/README.md)。
+
 ## 检查内容
 
 - 检查目录中是否存在大小为 0 KB 的 MCAP；
