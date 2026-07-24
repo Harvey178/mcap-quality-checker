@@ -18,6 +18,7 @@ from mcap_daily_check import load_config
 
 
 def parse_entire_file(path: Path) -> dict[str, object]:
+    """完整解析一个 MCAP，并核对实际消息数与 Summary 记录。"""
     started = time.time()
     result: dict[str, object] = {
         "file": str(path.resolve()),
@@ -47,6 +48,7 @@ def parse_entire_file(path: Path) -> dict[str, object]:
 
 
 def main() -> int:
+    """查找 0KB 文件，并对可复现的随机样本做完整性检测。"""
     parser = argparse.ArgumentParser(description="MCAP零字节及随机抽样完整性检查")
     parser.add_argument("input", type=Path)
     parser.add_argument("-o", "--output", type=Path, default=Path("reports/integrity"))

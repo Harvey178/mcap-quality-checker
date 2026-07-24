@@ -39,6 +39,7 @@ TERMINAL_NAMES = {
 
 
 def percentile(values: list[int], q: float) -> float | None:
+    """对整数序列计算线性插值百分位数。"""
     if not values:
         return None
     ordered = sorted(values)
@@ -47,6 +48,7 @@ def percentile(values: list[int], q: float) -> float | None:
 
 
 def inspect_file(path: Path, cfg: dict[str, Any], write_details: bool, output: Path) -> dict[str, Any]:
+    """按 Foxglove 播放时间检查单个 MCAP 的帧率、完整性和时间同步。"""
     started = time.time()
     topic_to_name = {spec["topic"]: name for name, spec in cfg["streams"].items()}
     log_times: dict[str, list[int]] = {name: [] for name in cfg["streams"]}
@@ -197,6 +199,7 @@ def inspect_file(path: Path, cfg: dict[str, Any], write_details: bool, output: P
 
 
 def print_terminal_summary(report: dict[str, Any], cfg: dict[str, Any]) -> None:
+    """输出一个文件的中文终端摘要。"""
     print(f"\n文件: {Path(report['file']).name}")
     print(
         f"测试结果: {report.get('status', 'FAIL')}  "
@@ -227,6 +230,7 @@ def print_terminal_summary(report: dict[str, Any], cfg: dict[str, Any]) -> None:
 
 
 def write_summary_csv(path: Path, reports: list[dict[str, Any]], stream_names: list[str]) -> None:
+    """写入兼容旧流程的汇总 CSV；Windows 主流程最终只保留 TXT。"""
     fields = ["文件", "结果", "MCAP时长(s)", "问题"]
     for name in stream_names:
         label = CSV_NAMES.get(name, name)
@@ -262,6 +266,7 @@ def write_summary_csv(path: Path, reports: list[dict[str, Any]], stream_names: l
 
 
 def main() -> int:
+    """解析参数、抽样 MCAP 并生成远程分析结果。"""
     parser = argparse.ArgumentParser(description="按 MCAP 播放时间检查 MCAP")
     parser.add_argument("input", type=Path, help="MCAP 文件或目录")
     parser.add_argument("-o", "--output", type=Path, default=Path("reports_FG"))

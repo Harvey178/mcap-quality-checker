@@ -65,6 +65,7 @@ TERMINAL_NAMES = {
 
 @dataclass
 class StreamResult:
+    """保存单路传感器的帧率、时间间隔统计和问题列表。"""
     topic: str
     expected_hz: float
     count: int = 0
@@ -84,6 +85,7 @@ class StreamResult:
 
 
 def percentile(values: list[int], q: float) -> float | None:
+    """计算整数序列的离散百分位数。"""
     if not values:
         return None
     ordered = sorted(values)
@@ -92,6 +94,7 @@ def percentile(values: list[int], q: float) -> float | None:
 
 
 def timestamp_to_ns(value: Any) -> int | None:
+    """把常见时间对象或数值安全转换为纳秒整数。"""
     if value is None:
         return None
     if hasattr(value, "seconds") and hasattr(value, "nanos"):
@@ -104,6 +107,7 @@ def timestamp_to_ns(value: Any) -> int | None:
 
 
 def protobuf_timestamp(obj: Any, message: Any, is_emg: bool) -> tuple[int, str]:
+    """从 protobuf 对象中选择采集时间，并返回字段来源。"""
     if is_emg:
         samples = getattr(obj, "samples", ())
         if samples:
@@ -122,6 +126,7 @@ def protobuf_timestamp(obj: Any, message: Any, is_emg: bool) -> tuple[int, str]:
 
 
 def extract_path(obj: Any, path: str) -> Any:
+    """按点分路径读取嵌套字典、列表或对象属性。"""
     value = obj
     for part in path.split("."):
         if isinstance(value, dict):
@@ -138,6 +143,7 @@ def extract_path(obj: Any, path: str) -> Any:
 def decode_timestamp(
     schema: Any, channel: Any, message: Any, decoder: DecoderFactory, spec: dict[str, Any]
 ) -> tuple[int, str]:
+    """按流配置解码时间字段，并统一换算成纳秒。"""
     if channel.message_encoding == "json":
         # Decimal preserves the full textual precision of large JSON timestamps.
         obj = json.loads(message.data, parse_float=Decimal)
@@ -163,6 +169,7 @@ def decode_timestamp(
 
 
 def nearest_deltas(reference: list[int], target: list[int]) -> list[int]:
+    """计算每个参考时间到目标序列最近帧的绝对差值。"""
     result: list[int] = []
     for value in reference:
         pos = bisect.bisect_left(target, value)
@@ -198,6 +205,7 @@ def max_nearest_pair(reference: list[int], target: list[int]) -> tuple[int, int,
 
 
 def ns_to_utc(value: int) -> str:
+    """将纳秒时间戳格式化为保留九位小数的 UTC 字符串。"""
     seconds, nanos = divmod(value, 1_000_000_000)
     base = datetime.fromtimestamp(seconds, tz=timezone.utc)
     return f"{base:%Y-%m-%dT%H:%M:%S}.{nanos:09d}Z"
@@ -211,6 +219,7 @@ def analyze_stream(
     cfg: dict[str, Any],
     mcap_duration_s: float,
 ) -> StreamResult:
+    """计算单路数据的 Foxglove 风格帧率和时间间隔质量。"""
     expected = float(spec["expected_hz"])
     result = StreamResult(topic=spec["topic"], expected_hz=expected, count=len(timestamps), timestamp_source=source)
     if len(timestamps) < 2:
@@ -241,6 +250,7 @@ def analyze_stream(
 
 
 def inspect_file(path: Path, cfg: dict[str, Any]) -> dict[str, Any]:
+    """读取一个 MCAP，检查全部 Topic 并计算与 RGB 的同步关系。"""
     started = time.time()
     topics = {v["topic"]: k for k, v in cfg["streams"].items()}
     timestamps: dict[str, list[int]] = {name: [] for name in cfg["streams"]}
@@ -334,6 +344,7 @@ def inspect_file(path: Path, cfg: dict[str, Any]) -> dict[str, Any]:
 
 
 def print_terminal_time_summary(report: dict[str, Any]) -> None:
+    """输出各路选中时间、UTC 时间及其相对 RGB 的差值。"""
     print(f"\n文件: {Path(report['file']).name}")
     if not report.get("container_valid"):
         print(f"测试结果: FAIL  问题: {'; '.join(report.get('issues', [])) or 'MCAP容器无效'}")
@@ -376,6 +387,7 @@ def print_terminal_time_summary(report: dict[str, Any]) -> None:
 
 
 def write_csv(path: Path, reports: list[dict[str, Any]]) -> None:
+    """写入兼容旧版调用方的批量汇总 CSV。"""
     fields = ["文件", "结果", "问题"]
     for name in DEFAULT_CONFIG["streams"]:
         label = CSV_NAMES.get(name, name)
@@ -414,6 +426,7 @@ def write_csv(path: Path, reports: list[dict[str, Any]]) -> None:
 
 
 def load_config(path: Path | None) -> dict[str, Any]:
+    """加载 JSON 检测参数，并与内置默认值合并。"""
     cfg = json.loads(json.dumps(DEFAULT_CONFIG))
     if path:
         custom = json.loads(path.read_text(encoding="utf-8"))
@@ -427,6 +440,7 @@ def load_config(path: Path | None) -> dict[str, Any]:
 
 
 def main() -> int:
+    """发现稳定 MCAP、执行批量检查并生成中间报告。"""
     parser = argparse.ArgumentParser(description="批量检查 MCAP 有效性、帧率和摄像头/IMU/EMG 时间同步")
     parser.add_argument("input", type=Path, help="MCAP 文件或数据目录")
     parser.add_argument("-o", "--output", type=Path, default=Path("reports"), help="报告目录")

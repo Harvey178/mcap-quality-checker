@@ -9,6 +9,7 @@ from pathlib import Path
 
 
 def main() -> int:
+    """截取问题时刻前后指定秒数的盒子日志并写入单独文件。"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--log-dir", type=Path, default=Path("/rkbox/log"))
     parser.add_argument("--utc-time", required=True)
@@ -24,6 +25,7 @@ def main() -> int:
         output.write(f"问题时间UTC: {utc.isoformat()}\n")
         output.write(f"盒子时间UTC+8: {local.isoformat(sep=' ')}\n")
         output.write(f"提取范围: {start} ~ {end}\n\n")
+        # rkbox 日志会轮转为 main.log、main.001.log 等，需逐个扫描。
         for path in sorted(args.log_dir.glob("main*.log")):
             wrote_header = False
             with path.open("r", encoding="utf-8", errors="replace") as source:

@@ -1,9 +1,11 @@
 {
+  // Ctrl+Shift+P -> Tasks: Run Task 可执行下面的首次安装任务。
   "version": "2.0.0",
   "tasks": [
     {
       "label": "首次安装Python环境",
       "type": "shell",
+      // Bypass 只对本次进程生效，不修改系统执行策略。
       "command": "powershell",
       "args": [
         "-NoProfile",

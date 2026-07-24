@@ -1,10 +1,12 @@
 {
+  // VS Code F5 调试入口：使用工作区虚拟环境运行 Windows 主控制器。
   "version": "0.2.0",
   "configurations": [
     {
       "name": "运行MCAP盒子检查",
       "type": "debugpy",
       "request": "launch",
+      // 主控制器默认读取工作区根目录下的 boxes.yaml。
       "program": "${workspaceFolder}\\mcap_check_for_FG.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",

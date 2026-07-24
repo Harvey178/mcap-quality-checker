@@ -35,6 +35,7 @@ DISPLAY_NAMES = {
 
 
 def ns_to_beijing(value: int) -> str:
+    """将 Unix 纳秒时间戳格式化为 UTC+8 字符串。"""
     seconds, nanos = divmod(int(value), 1_000_000_000)
     beijing = timezone(timedelta(hours=8))
     base = datetime.fromtimestamp(seconds, tz=beijing)
@@ -42,6 +43,7 @@ def ns_to_beijing(value: int) -> str:
 
 
 def append_log(path: Path | None, message: str) -> None:
+    """以 UTF-8 BOM 编码追加一行带本地时间的运行日志。"""
     if path is None:
         return
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -50,14 +52,17 @@ def append_log(path: Path | None, message: str) -> None:
 
 
 def run_log(message: str) -> None:
+    """记录正常运行轨迹。"""
     append_log(RUN_LOG_PATH, message)
 
 
 def error_log(message: str) -> None:
+    """记录异常发现、下载和日志提取过程。"""
     append_log(ERROR_LOG_PATH, message)
 
 
 def remote_run(client: paramiko.SSHClient, command: str, timeout: int = 900) -> int:
+    """前台执行远程命令，实时转发标准输出并返回退出码。"""
     print("盒子执行检测...", flush=True)
     _, stdout, stderr = client.exec_command(command, timeout=timeout, get_pty=True)
     for line in iter(stdout.readline, ""):
@@ -78,6 +83,7 @@ def remote_run_background(
     run_id: str,
     timeout: int = 900,
 ) -> int:
+    """在盒子后台执行长任务并轮询退出状态，避免 SSH 会话中断。"""
     script_path = f"{remote_root}/run_{run_id}.sh"
     log_path = f"{remote_root}/run_{run_id}.log"
     exit_path = f"{remote_root}/run_{run_id}.exit"
@@ -109,6 +115,7 @@ def remote_run_background(
 
 
 def main() -> int:
+    """协调多盒子检测、远程分析、异常下载和本地 TXT 报告生成。"""
     global RUN_LOG_PATH, ERROR_LOG_PATH
     parser = argparse.ArgumentParser(description="Windows启动盒子检测并按需下载问题文件")
     parser.add_argument("--config", type=Path, default=ROOT / "boxes.yaml")
@@ -116,6 +123,7 @@ def main() -> int:
     parser.add_argument("--seed", help="默认使用当天日期")
     args = parser.parse_args()
     config_path = args.config.resolve()
+    # 父进程逐台调度；子进程使用 --box 执行单盒子的完整流程。
     if not args.box:
         box_names = get_box_names(config_path)
         if len(box_names) > 1:
@@ -157,6 +165,7 @@ def main() -> int:
     task_log_dir.mkdir(parents=True, exist_ok=True)
     RUN_LOG_PATH = task_log_dir / "脚本运行.log"
     ERROR_LOG_PATH = task_log_dir / "异常处理.log"
+    # 将 YAML 中可调整的帧率和同步阈值写入本次远程运行配置。
     runtime_check_config = json.loads(
         (ROOT / "mcap_check_config.json").read_text(encoding="utf-8")
     )
@@ -198,6 +207,7 @@ def main() -> int:
     box_lines = box_stdout.read().decode("utf-8", errors="replace").splitlines()
     remote_hostname = box_lines[0] if box_lines else "unknown"
     box_time = box_lines[1] if len(box_lines) > 1 else "unknown"
+    # 先检查全目录 0KB 文件，再从已经停止写入的文件中抽取样本。
     entries = list(walk_mcap(sftp, config["remote_data_directory"]))
     now = time.time()
     zero_files = sorted(path for path, item in entries if item.st_size == 0)
@@ -219,6 +229,7 @@ def main() -> int:
     remote_root = f"/home/{ssh['username']}/.mcap_windows_check"
     remote_report = f"{remote_root}/reports/{stamp}"
     client.exec_command(f"mkdir -p {shlex.quote(remote_report)}")[1].channel.recv_exit_status()
+    # 远程只部署分析所需文件，正常 MCAP 始终留在盒子上。
     uploads = {
         ROOT / "mcap_check_for_FG_local.py": f"{remote_root}/mcap_check_for_FG.py",
         ROOT / "mcap_daily_check.py": f"{remote_root}/mcap_daily_check.py",
@@ -276,6 +287,7 @@ def main() -> int:
         )
         error_log(f"发现0KB异常文件并生成检查说明：{path}")
 
+    # 只有失败样本会下载，同时提取问题时刻附近的 rkbox 日志。
     for item in failed_results:
         remote_mcap = item["file"]
         item_dir = anomaly_run_dir / Path(remote_mcap).stem
@@ -343,6 +355,7 @@ def main() -> int:
     report_lines: list[str] = []
 
     def emit(text: str = "") -> None:
+        """同时写入终端缓存和最终 TXT 报告。"""
         report_lines.append(text)
         print(text)
 

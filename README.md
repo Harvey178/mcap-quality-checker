@@ -302,6 +302,37 @@ git check-ignore boxes.yaml
 
 发现密码或 MCAP 被暂存时，不要执行 `git commit` 或 `git push`。
 
+## 项目文件说明
+
+| 文件 | 用途 |
+|---|---|
+| `mcap_check_for_FG.py` | Windows 主控制器，负责 SSH、抽样、远程分析、报告和异常下载 |
+| `box_config.py` | 读取多盒子 YAML、合并 SSH 配置并更新解析后的 IP |
+| `boxes.example.yaml` | 可公开提交的带注释配置模板 |
+| `boxes.yaml` | 包含真实账号密码的本地配置，不提交 Git |
+| `mcap_check_for_FG_local.py` | 上传到盒子执行的 Foxglove 口径分析入口 |
+| `mcap_daily_check.py` | MCAP Topic、帧率、时间字段和同步计算核心 |
+| `mcap_integrity_check.py` | 0KB 和随机样本完整解析检查 |
+| `extract_remote_logs.py` | 提取问题时刻附近的 `/rkbox/log` 日志 |
+| `mcap_check_config.json` | 远程分析的内部默认参数和六路 Topic 定义 |
+| `run_FG_windows.ps1` | 推荐的 Windows 手动/计划任务运行入口 |
+| `run_windows.ps1` | 下载抽样 MCAP 后在 Windows 分析的兼容入口 |
+| `setup_windows.ps1` | 创建虚拟环境并安装依赖 |
+| `install_scheduled_tasks.ps1` | 安装每天 08:00、20:00 的计划任务 |
+| `uninstall_scheduled_tasks.ps1` | 删除计划任务 |
+
+`mcap_check_config.json` 使用严格 JSON 格式，JSON 标准不允许写注释。字段说明如下：
+
+- `stable_seconds`：内部默认的文件稳定等待秒数；
+- `rate_tolerance_percent`：帧率允许误差百分比；
+- `gap_factor`：判定异常长间隔的倍数；
+- `sync_threshold_ms`：与 RGB 时间同步的允许差值；
+- `coverage_threshold_ms`：流时间覆盖范围的允许差值；
+- `streams`：六路 Topic、目标帧率、时间字段路径及时间单位。
+
+运行时会用 `boxes.yaml` 中的参数覆盖对应内部默认值，因此日常调整应优先修改
+`boxes.yaml`，不需要直接修改 `mcap_check_config.json`。
+
 ## 更新现有安装
 
 代码更新或 `requirements.txt` 发生变化后，在项目目录执行：

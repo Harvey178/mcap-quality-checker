@@ -1,3 +1,4 @@
+# 创建每天 08:00 和 20:00 运行的 Windows 计划任务。
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -10,15 +11,17 @@ if (-not (Test-Path -LiteralPath (Join-Path $Root ".venv\Scripts\python.exe"))) 
     throw "Local Python environment not found. Run .\setup_windows.ps1 first."
 }
 
+# 计划任务运行当前项目的远程分析入口。
 $Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$Runner`""
 $Action = New-ScheduledTaskAction `
     -Execute $PowerShell `
     -Argument $Arguments `
     -WorkingDirectory $Root
-$Triggers = @(
-    New-ScheduledTaskTrigger -Daily -At "08:00"
-    New-ScheduledTaskTrigger -Daily -At "20:00"
-)
+# 使用两个每日触发器，错过时间后由 StartWhenAvailable 尽快补跑。
+$MorningTrigger = New-ScheduledTaskTrigger -Daily -At "08:00"
+$EveningTrigger = New-ScheduledTaskTrigger -Daily -At "20:00"
+$Triggers = @($MorningTrigger, $EveningTrigger)
+# Interactive 表示仅在当前 Windows 用户已经登录时运行。
 $Principal = New-ScheduledTaskPrincipal `
     -UserId $CurrentUser `
     -LogonType Interactive `

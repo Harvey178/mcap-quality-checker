@@ -1,4 +1,6 @@
 {
+  // 固定使用项目虚拟环境，避免误用系统 Python。
   "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+  // 项目操作指引和计划任务命令均以 PowerShell 为准。
   "terminal.integrated.defaultProfile.windows": "PowerShell"
 }

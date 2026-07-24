@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parent
 
 
 def walk_mcap(sftp: paramiko.SFTPClient, root: str):
+    """递归枚举远程目录下的全部 MCAP 文件。"""
     for entry in sftp.listdir_attr(root):
         path = str(PurePosixPath(root) / entry.filename)
         if stat.S_ISDIR(entry.st_mode):
@@ -31,10 +32,12 @@ def walk_mcap(sftp: paramiko.SFTPClient, root: str):
 
 
 def download(sftp: paramiko.SFTPClient, remote: str, local: Path, size: int) -> None:
+    """通过 SFTP 下载文件，显示进度并校验最终字节数。"""
     local.parent.mkdir(parents=True, exist_ok=True)
     last_percent = -1
 
     def progress(done: int, total: int) -> None:
+        """每跨过 10% 输出一次进度，避免刷屏。"""
         nonlocal last_percent
         percent = int(done * 100 / total) if total else 100
         if percent // 10 != last_percent // 10:
@@ -47,17 +50,20 @@ def download(sftp: paramiko.SFTPClient, remote: str, local: Path, size: int) -> 
 
 
 def run_check(arguments: list[str]) -> int:
+    """启动一个本地检测子进程并返回退出码。"""
     print("本地执行: " + " ".join(arguments), flush=True)
     return subprocess.run(arguments, cwd=ROOT).returncode
 
 
 def main() -> int:
+    """读取 YAML、多盒子调度、下载抽样文件并执行本地检测。"""
     parser = argparse.ArgumentParser(description="Windows本地通过SSH抽样检查盒子MCAP")
     parser.add_argument("--config", type=Path, default=ROOT / "boxes.yaml")
     parser.add_argument("--box", help="只检测指定名称的盒子；默认依次检测全部盒子")
     parser.add_argument("--seed", help="默认使用当天日期")
     args = parser.parse_args()
     config_path = args.config.resolve()
+    # 父进程遍历盒子；带 --box 的子进程只处理一台设备。
     if not args.box:
         box_names = get_box_names(config_path)
         if len(box_names) > 1:
